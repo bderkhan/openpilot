@@ -67,9 +67,11 @@ Prepare a compatible upstream OS and Python/runtime dependencies on the bench
 device before transferring this local bench checkout. The launcher will not
 download or install them. Stop the stock manager and its children before
 starting the bench manager; the preflight refuses startup if a leftover
-vehicle-control or stock-DM process is running, if no Panda is detected, if a
-Panda is in bootstub, if the native `pandad` hash does not match the
-manifest, or if the Comma 4 LED controls cannot be reset and verified.
+vehicle-control or stock-DM process is running, if the native `pandad` hash
+does not match the manifest, or if the Comma 4 LED controls cannot be reset
+and verified. A missing or bootstub harness Panda is not fatal: the manager
+boots to the offroad UI and stock `pandad` connects/flashes the harness
+exactly like a normal comma install.
 
 From the root of this checkout on the prepared bench device:
 
