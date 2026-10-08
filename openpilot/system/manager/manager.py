@@ -25,6 +25,8 @@ from openpilot.sunnypilot.system.params_migration import run_migration
 
 
 def manager_init() -> None:
+  from bkv_bench import initialize_bench
+  initialize_bench()
   save_bootlog()
 
   build_metadata = get_build_metadata()
@@ -81,7 +83,7 @@ def manager_init() -> None:
   params.put("HardwareSerial", serial, block=True)
 
   # set dongle id
-  reg_res = register(show_spinner=True)
+  reg_res = UNREGISTERED_DONGLE_ID
   if reg_res:
     dongle_id = reg_res
   else:

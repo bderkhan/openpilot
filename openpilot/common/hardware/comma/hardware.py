@@ -108,16 +108,8 @@ class HardwareComma(HardwareBase):
       return int(f.read())
 
   def set_ir_power(self, percent: int):
-    if self.get_device_type() == "tizi":
-      return
-
-    value = int((percent / 100) * 300)
-    with open("/sys/class/leds/led:switch_2/brightness", "w") as f:
-      f.write("0\n")
-    with open("/sys/class/leds/led:torch_2/brightness", "w") as f:
-      f.write(f"{value}\n")
-    with open("/sys/class/leds/led:switch_2/brightness", "w") as f:
-      f.write(f"{value}\n")
+    # Startup resets LEDs once; stock control must not overwrite the new bench algorithm.
+    return
 
   def get_network_type(self):
     try:

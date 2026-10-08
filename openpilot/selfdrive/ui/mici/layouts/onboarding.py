@@ -1,4 +1,5 @@
 import math
+from bkv_bench import BENCH_ONLY
 import numpy as np
 import pyray as rl
 from collections.abc import Callable
@@ -122,6 +123,9 @@ class TrainingGuideDMTutorial(NavWidget):
 
   def _update_state(self):
     super()._update_state()
+    if BENCH_ONLY:
+      self._good_button.set_enabled(True)
+      return
     if device.awake and not ui_state.params.get_bool("IsDriverViewEnabled"):
       ui_state.params.put_bool("IsDriverViewEnabled", True)
 

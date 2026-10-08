@@ -81,7 +81,8 @@ uint16_t Panda::get_fan_speed() {
 }
 
 void Panda::set_ir_pwr(uint16_t ir_pwr) {
-  handle->control_write(0xb0, ir_pwr, 0);
+  // Fixed bench branch: illumination belongs to the replacement controller.
+  return;
 }
 
 std::optional<health_t> Panda::get_state() {

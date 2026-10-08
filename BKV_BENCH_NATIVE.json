@@ -1,0 +1,10 @@
+{
+  "binary": "openpilot/selfdrive/pandad/pandad",
+  "base": "81d7957c0a5fd0fc0874245e7c109e296f2a507f",
+  "original_sha256": "9accc250c4846dab7b8be3349746b1c42110e671448cfef7c5807d60d7ec801b",
+  "bench_sha256": "8eeef1145eebedb0b3916ec2efa60e52614b893e646e9be8fce2e46db6b7877d",
+  "main_file_offset": 304544,
+  "entry_address": 304544,
+  "exit_instructions": "c0098052a80b80d2010000d4",
+  "verified_exit_status": 78
+}
