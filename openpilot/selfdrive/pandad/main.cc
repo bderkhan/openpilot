@@ -6,8 +6,6 @@
 #include "common/hardware/hw.h"
 
 int main(int argc, char *argv[]) {
-  // Fixed bench branch: rebuilding must never restore the physical CAN bridge.
-  return 78;
   LOGW("starting pandad");
 
   if (!Hardware::PC()) {

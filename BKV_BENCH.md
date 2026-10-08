@@ -8,66 +8,68 @@
 - Local-only branch: `BKVBench-20261007`.
 - OS target: AGNOS 19.7, as specified by this upstream release.
 - Prepared October 7, 2026. No push, custom installer, or physical-device validation.
-- Intended only for an isolated simulator with a real comma device. Never connect
-  a vehicle harness or enable real steering, braking, or acceleration.
 
-The purpose is to test replacement driver monitoring, model-based seatbelt
-detection for cars without a suitable belt signal, and replacement day/night
-illumination control. This is NOT an engagement-capable driving build.
+Intended for the lab bench: a real comma device and Panda connected to the
+physical Toyota-mimicking simulator rig. Stock CAN communication, Panda safety
+modes, vehicle actuation, and the normal engagement state machine are fully
+intact so the simulator works end to end. Only the stock driver monitoring,
+stock seatbelt events, and stock IR/LED output are removed so the replacement
+monitoring/illumination software can be developed against this build.
 
-## Changes
+## Removed (as requested)
 
-1. `bkv_bench.py` restricts manager processes to reviewed camera, perception,
-   UI, planning, and logging services. New/unrecognized processes default to
-   disabled. Stock `dmonitoringd` and `dmonitoringmodeld` are not launched.
-   MICI onboarding, where present, does not wait for the disabled stock face
-   detector. No replacement monitor has been included or marked validated.
-2. `card`, `controlsd`, `selfdrived`, `pandad`, `_pandad`, joystick and
-   maneuver services are disabled. There are no synthetic healthy-DM publishers
-   or fake engagement messages. The normal driving/engagement state machine is
-   intentionally unavailable.
-3. The common car-event path no longer emits stock seatbelt events. Raw vehicle
-   seatbelt fields and message schemas remain intact for observations/model
-   comparisons. Other car-event logic remains unchanged.
-4. Python Panda CAN-send APIs raise instead of transmitting. Non-silent safety
-   modes, enabling CAN transceivers, and engaged heartbeats are rejected.
-5. Manager init requires explicit bench acknowledgment and refuses startup if
-   an existing vehicle-control or stock DM process is detected. It verifies the
-   native Panda binary before opening hardware.
-6. All detected Pandas are put into silent safety mode, their transmit queues
-   cleared and CAN transceivers disabled. Startup checks that safety mode is
-   silent and controls are not allowed. Missing/incompatible hardware is fatal;
-   startup never flashes firmware as a fallback.
-7. IR is set to zero once through Panda. Comma 4 direct LED switch/torch controls
-   are reset to zero and read back. Missing C4 controls, failed writes, or
-   unexpected readback fail startup. Stock Python host LED setters are no-ops;
-   stock Panda IR requests are clamped to zero.
-8. The native prebuilt `pandad` executable exits with status 78. Its ELF entry
-   is redirected to a short exit stub at `main`. Original and modified SHA-256
-   values and byte locations are recorded in `BKV_BENCH_NATIVE.json`. Both the
-   Python wrapper and process launchers reject attempts to start the bridge.
-9. Where available, C++ IR setters are no-ops; the C4 native bridge source
-   entry point also returns 78 so a rebuild cannot restore that bridge.
-10. `launch_chffrplus.sh` routes directly into `launch_bkv_bench.sh`. The bench
-    launcher does not upgrade the OS, install an overlay, register with cloud
-    services, or start an updater. Manager init avoids network registration.
-    An OS-version mismatch produces a clear refusal instead of an update loop.
+1. Stock `dmonitoringd` and `dmonitoringmodeld` never start. The bench policy
+   (`bkv_bench.py`) disables exactly three processes: the two stock DM
+   processes and `updated`. Every other upstream process runs stock,
+   including `pandad`, `card`, `controlsd`, `selfdrived`, `hardwared`, and
+   `joystickd`. There is no allowlist; unknown upstream processes are not
+   blocked.
+2. Missing stock `driverMonitoringState` cannot break the run:
+   `selfdrived` ignores it in health checks and skips the stock DM
+   lockout/alert-event block, and `controlsd` cannot trigger the stock-DM
+   force-decel/escalation path. Both are gated behind
+   `STOCK_DRIVER_MONITORING_ENABLED = False` (same pattern as the private
+   `Comma4BKV` handoff branch). The onboarding DM tutorial does not wait for
+   the stock face detector, and circular alerts are no longer hidden when
+   `driverStateV2` is absent.
+3. The common car-event path no longer emits stock seatbelt events
+   (`seatbeltNotLatched`). The raw seatbelt signal stays parsed in car state
+   so the replacement seatbelt monitor can consume it.
+4. IR/LED output is off through every stock path:
+   - `openpilot/common/hardware/comma/hardware.py`/`hardware.h`
+     `set_ir_power()` are no-ops.
+   - `openpilot/selfdrive/pandad/panda.cc` `Panda::set_ir_pwr()` is a no-op
+     (source-level, for rebuilds), and `main.cc` starts normally.
+   - `panda/python/__init__.py` `Panda.set_ir_power()` always sends 0 to
+     USB request `0xb0`.
+   - The prebuilt native `pandad` binary's `Panda::set_ir_pwr` and
+     `HardwareComma::set_ir_power` entries are patched to immediate ARM64
+     `ret` instructions, mirroring the proven `Comma4BKV` binary patches.
+     The ELF entry point and every other byte are stock, so CAN is untouched.
+     Hashes and offsets are in `BKV_BENCH_NATIVE.json`.
+   - `launch_chffrplus.sh`/bench startup resets `led:switch_2` and
+     `led:torch_2` brightness to zero once before manager starts.
 
-Upstream source, schemas and model artifacts that are not active writers remain
-for compatibility. Disabled services stay visible as stopped in manager state.
-Normal upstream branches are unchanged. Earlier private cleanup branches were
-also left untouched; this document does not certify those builds for road use.
+## Intact (stock behavior)
+
+- Panda `can_send`/`can_send_many`, CAN receive, `set_safety_mode` (any mode),
+  `set_can_enable`, and engaged heartbeats are unmodified stock.
+- `pandad` runs normally: no `NOBOARD` export, no process blocking, no
+  silent-mode forcing, no transceiver disabling, no fan override.
+- The normal driving/engagement state machine, alerts, and all upstream
+  services are available. The rig's CAN bus is treated like a real car.
+- Chestnut/big-model support, the model selector, and all other new v2026.003
+  upstream behavior are unmodified.
 
 ## Bench Startup Contract
 
-Prepare a compatible upstream OS and Python/runtime dependencies on the isolated
+Prepare a compatible upstream OS and Python/runtime dependencies on the bench
 device before transferring this local bench checkout. The launcher will not
-download or install them. IQ.Pilot additionally needs its matching verified
-runtime/bundles already provisioned; this bench launcher does not install or
-modify signed bundles.
-
-Stop the stock manager and its children before starting the bench manager.
-Do not run two managers or two publishers for the same topic.
+download or install them. Stop the stock manager and its children before
+starting the bench manager; the preflight refuses startup if a leftover
+vehicle-control or stock-DM process is running, if no Panda is detected, if a
+Panda is in bootstub, if the native `pandad` hash does not match the
+manifest, or if the Comma 4 LED controls cannot be reset and verified.
 
 From the root of this checkout on the prepared bench device:
 
@@ -75,32 +77,27 @@ From the root of this checkout on the prepared bench device:
 BKV_ISOLATED_BENCH=1 bash launch_bkv_bench.sh
 ```
 
-The acknowledgment is NOT a mode switch back to driving. The fixed source
-interlocks apply independently of that environment variable.
+The bench launcher still never upgrades the OS, swaps an overlay, registers
+with cloud services, or starts the updater; manager init skips network
+registration. An OS-version mismatch produces a clear refusal instead of an
+update loop. The acknowledgment is a bench gate, not a mode switch.
 
-The simulator must publish compatible `deviceState`, `carParams`, and simulated
-CAN/data inputs expected by the selected perception services. In the latest C4
-release camera topic names include `cabinCameraState`; adapt the harness to this
-release's schemas instead of copying the older C3 message layout. The bench
-does not emulate a detected physical car or enable normal openpilot engagement.
-Use simulated message transport, not the real Panda CAN-transmit API. Camera
-processes still follow their upstream onroad/driver-view conditions.
+Because stock `hardwared` and `card` run normally against the real comma
+device and the rig's CAN, no synthetic `deviceState`/`carParams` publishers
+are needed; do not run a second publisher for topics the device already owns.
 
-Stock `hardwared` is excluded so it does not compete with the simulator's
-`deviceState` publisher. Since native fan control is excluded, startup requests
-100% fan speed. Supervise cooling and temperature externally throughout tests;
-this is not a replacement thermal controller.
+## Handoff notes for the replacement DM/seatbelt/IR implementation
 
-Your coworker's replacement monitor/illumination process is not included here.
-Add it as a separate non-actuating process only after reviewing it, explicitly
-allow it in the bench policy, and test its message compatibility. Do not restore
-vehicle-control/Panda processes. Host stock LED setters do not repeatedly reset
-a replacement controller after startup; the replacement controller must own its
-own tested illumination path.
-
-Before returning a device to any stock driving build, remove this bench runtime,
-power-cycle it, and verify the stock firmware/software safety behavior. These
-bench changes are not a permanent hardware modification or firmware flash.
+- If the replacement monitor publishes `driverMonitoringState`, re-enable the
+  health requirement and event ingestion intentionally by flipping
+  `STOCK_DRIVER_MONITORING_ENABLED` in `selfdrived.py`/`controlsd.py`, and
+  remove the stock DM names from `BENCH_DISABLED_PROCESSES` in `bkv_bench.py`.
+- If the replacement should drive the LEDs again, deliberately re-enable the
+  clamp points listed above and coordinate with the startup reset so the
+  initial reset does not clear the replacement's brightness. A rebuilt native
+  `pandad` changes its hash: re-audit both LED setter entries and update
+  `BKV_BENCH_NATIVE.json` before bench startup will accept it.
+- The stock DM source files remain in-tree for reference; they are inactive.
 
 ## Verification
 
@@ -108,14 +105,16 @@ bench changes are not a permanent hardware modification or firmware flash.
 python3 bkv_bench_tests.py
 ```
 
-The host suite exercises production process configuration and method bodies with
-mocked hardware, blocked CAN attempts, startup failure cases, LED writes, native
-binary hashes/entry point and seatbelt events. It does not import or execute
-ARM64 device extensions on the Mac. Native exit instructions were separately
-verified under ARM64 emulation, with all bytes outside the entry/header patch
-unchanged from upstream.
+The host suite exercises the production process configuration and method
+bodies with mocked hardware: stock CAN/safety-mode/heartbeat behavior, IR
+zero-clamping, disabled stock-DM processes, stock DM runtime gating, seatbelt
+event removal, bench preflight failure cases, LED writes, the onboarding
+bypass, the launcher acknowledgment, and the native binary hash/patch
+manifest. The patched IR/LED entries were also emulated under ARM64 and return
+immediately with no memory writes or register side effects.
 
-Hardware boot, camera streams, actual zero LED output, temperatures, and the
-coworker's replacement software still require bench validation on the device.
-Any upstream binary replacement/rebuild changes its hash and is rejected at
-startup until its non-actuation behavior is reviewed and the manifest updated.
+Hardware boot, camera streams (note this release uses `cabinCameraState`
+topic names), LED output, and the coworker's replacement software still
+require validation on the bench device. This is a bench build for the
+simulator rig; a road-use build must retain working driver monitoring and
+seatbelt engagement checks.
