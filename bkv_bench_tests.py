@@ -288,6 +288,20 @@ class BenchTests(unittest.TestCase):
       self.assertIn("STOCK_DRIVER_MONITORING_ENABLED = False", path.read_text())
     self.assertIn("STOCK_DRIVER_MONITORING_ENABLED and", controlsd.read_text())
     self.assertIn("ignore += ['driverMonitoringState']", selfdrived.read_text())
+    seatbelt = ROOT / PACKAGE / "selfdrive/car" / ("car_events.py" if PACKAGE == "openpilot" else "car_specific.py")
+    self.assertIn("SEATBELT_DETECTION_ENABLED = False", seatbelt.read_text())
+
+  def test_offline_update_lockout_is_removed(self):
+    self.assertTrue(bench.UPDATES_DISABLED)
+    self.assertIn("Offroad_ConnectivityNeeded", bench.STALE_UPDATE_KEYS)
+    bench.clear_stale_update_alerts()  # must never raise, even off-device
+    hardwared = SYSTEM / "hardware/hardwared.py"
+    source = hardwared.read_text()
+    if PACKAGE == "iqpilot":
+      self.assertIn('startup_conditions["up_to_date"] = True', source)
+    else:
+      self.assertIn("from bkv_bench import UPDATES_DISABLED", source)
+      self.assertIn('UPDATES_DISABLED or params.get("Offroad_ConnectivityNeeded")', source)
 
   def test_manager_requires_bench_acknowledgment(self):
     namespace = definitions(SYSTEM / "manager/manager.py", {"manager_init"}, {})
@@ -311,7 +325,7 @@ class BenchTests(unittest.TestCase):
         return name
     namespace = definitions(path, {"create_common_events"},
                             {"Events": Events, "EventName": Names(), "GearShifter": Names(),
-                             "MAX_CTRL_SPEED": 100, "DT_CTRL": 0.01,
+                             "MAX_CTRL_SPEED": 100, "DT_CTRL": 0.01, "SEATBELT_DETECTION_ENABLED": False,
                              "interfaces": {"test": SimpleNamespace(DRIVABLE_GEARS=())}}, classes=True)
     method = namespace["create_common_events"]
     attributes = {n.attr for n in ast.walk(ast.parse(path.read_text()))

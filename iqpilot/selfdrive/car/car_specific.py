@@ -10,6 +10,7 @@ ButtonType = structs.CarState.ButtonEvent.Type
 GearShifter = structs.CarState.GearShifter
 EventName = log.OnroadEvent.EventName
 NetworkLocation = structs.CarParams.NetworkLocation
+SEATBELT_DETECTION_ENABLED = False
 
 
 class CarSpecificEvents:
@@ -93,8 +94,8 @@ class CarSpecificEvents:
 
     if CS.doorOpen:
       events.add(EventName.doorOpen)
-    # Stock seatbelt events are removed on this bench build so the replacement
-    # seatbelt monitor can own that behavior; the raw signal stays parsed for it.
+    if SEATBELT_DETECTION_ENABLED and CS.seatbeltUnlatched:
+      events.add(EventName.seatbeltNotLatched)
     if CS.gearShifter != GearShifter.drive and CS.gearShifter not in CI.DRIVABLE_GEARS:
       events.add(EventName.wrongGear)
     if CS.gearShifter == GearShifter.reverse:
