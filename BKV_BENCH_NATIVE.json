@@ -2,9 +2,15 @@
   "binary": "selfdrive/pandad/pandad",
   "base": "1f7233cb983f3c13fdbba47a86f8fbc796ad9211",
   "original_sha256": "d6aec42d8e6c6352ee12374ca4a24eea758a2581ae72bae9c497622e886b1212",
-  "bench_sha256": "68ba76f274edf579805f9bfdc03415539f78f0c7fff8666801cb95f28f22ed20",
-  "main_file_offset": 142816,
-  "entry_address": 142816,
-  "exit_instructions": "c0098052a80b80d2010000d4",
-  "verified_exit_status": 78
+  "bench_sha256": "779eda16591afce95db7afe9b52554d07dc120ceb9a32d38edc8e6560ce088c3",
+  "patches": [
+    {
+      "symbol": "_ZN5Panda10set_ir_pwrEt",
+      "file_offset": 168672,
+      "entry_address": 168672,
+      "size": 32,
+      "instructions": "c0035fd6",
+      "purpose": "immediate ret: stock IR/LED output removed, CAN untouched"
+    }
+  ]
 }

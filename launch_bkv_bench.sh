@@ -8,7 +8,6 @@ if [ "${BKV_ISOLATED_BENCH:-}" != "1" ]; then
   exit 78
 fi
 source "$DIR/launch_env.sh"
-export NOBOARD=1
 
 # Bench startup never upgrades the OS, swaps an overlay, or starts cloud services.
 if [ -f /AGNOS ]; then
@@ -38,6 +37,6 @@ else
   MANAGER_DIR="$DIR/system/manager"
 fi
 
-echo "BKV BENCH ONLY. Simulator must supply deviceState/carParams and simulated CAN."
+echo "BKV BENCH ONLY. Stock CAN and vehicle control are enabled for the simulator rig; stock DM/seatbelt events/IR stay disabled."
 cd "$MANAGER_DIR"
 exec "$PYTHON" ./manager.py
