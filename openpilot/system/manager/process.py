@@ -1,5 +1,4 @@
 import importlib
-from bkv_bench import require_process
 import os
 import signal
 import time
@@ -20,7 +19,6 @@ from openpilot.common.swaglog import cloudlog
 
 
 def launcher(proc: str, name: str) -> None:
-  require_process(name)
   try:
     # import the process
     mod = importlib.import_module(proc)
@@ -47,7 +45,6 @@ def launcher(proc: str, name: str) -> None:
 
 
 def nativelauncher(pargs: list[str], cwd: str, name: str) -> None:
-  require_process(name)
   os.environ['MANAGER_DAEMON'] = name
 
   # exec the process
@@ -145,7 +142,6 @@ class NativeProcess(ManagerProcess):
     self.launcher = nativelauncher
 
   def start(self) -> None:
-    require_process(self.name)
     # In case we only tried a non blocking stop we need to stop it before restarting
     if self.shutting_down:
       self.stop()
@@ -170,7 +166,6 @@ class PythonProcess(ManagerProcess):
     self.launcher = launcher
 
   def start(self) -> None:
-    require_process(self.name)
     # In case we only tried a non blocking stop we need to stop it before restarting
     if self.shutting_down:
       self.stop()
@@ -199,7 +194,6 @@ class DaemonProcess(ManagerProcess):
     return True
 
   def start(self) -> None:
-    require_process(self.name)
     if self.params is None:
       self.params = Params()
 

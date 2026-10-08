@@ -27,7 +27,6 @@ from openpilot.sunnypilot.selfdrive.controls.controlsd_ext import ControlsExt
 State = log.SelfdriveState.OpenpilotState
 LaneChangeState = log.LaneChangeState
 LaneChangeDirection = log.LaneChangeDirection
-STOCK_DRIVER_MONITORING_ENABLED = False
 
 ACTUATOR_FIELDS = tuple(car.CarControl.Actuators.schema.fields.keys())
 
@@ -46,7 +45,7 @@ class Controls(ControlsExt):
 
     self.sm = messaging.SubMaster(['lateralDelay', 'vehicleParameters', 'lateralTorqueParameters', 'modelV2', 'selfdriveState',
                                    'extrinsicsCalibration', 'deviceMotion', 'longitudinalPlan', 'lateralManeuverPlan', 'carState', 'carOutput',
-                                   'driverMonitoringState', 'onroadEvents', 'driverAssistance'] + self.sm_services_ext,
+                                   'onroadEvents', 'driverAssistance'] + self.sm_services_ext,
                                   poll='selfdriveState')
     self.pm = messaging.PubMaster(['carControl', 'controlsState'] + self.pm_services_ext)
 
@@ -220,8 +219,7 @@ class Controls(ControlsExt):
     cs.upAccelCmd = float(self.LoC.pid.p)
     cs.uiAccelCmd = float(self.LoC.pid.i)
     cs.ufAccelCmd = float(self.LoC.pid.f)
-    cs.forceDecel = bool((STOCK_DRIVER_MONITORING_ENABLED and self.sm['driverMonitoringState'].noResponseForceDecel) or
-                         (self.sm['selfdriveState'].state == State.softDisabling))
+    cs.forceDecel = bool(self.sm['selfdriveState'].state == State.softDisabling)
 
     # trigger the car's stock driver monitoring escalation
     CC.driverMonitoringEscalation = cs.forceDecel

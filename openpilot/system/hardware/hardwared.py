@@ -22,7 +22,6 @@ from openpilot.common.basedir import BASEDIR
 from openpilot.common.git import get_short_branch
 from openpilot.common.hardware.usb import CHESTNUT_FW_VERSION, CHESTNUT_USB_PRODUCT, get_usb_state, get_usb_topology, is_chestnut_usb_id, set_usb_state
 from openpilot.common.linux import LinuxSystemStats
-from bkv_bench import UPDATES_DISABLED
 from openpilot.system.loggerd.config import get_available_percent
 from openpilot.common.swaglog import cloudlog
 from openpilot.sunnypilot.system.statsd import statlog
@@ -343,7 +342,7 @@ def hardware_thread(end_event, hw_queue) -> None:
 
     # **** starting logic ****
 
-    startup_conditions["up_to_date"] = UPDATES_DISABLED or params.get("Offroad_ConnectivityNeeded") is None or params.get_bool("DisableUpdates") or params.get_bool("SnoozeUpdate")
+    startup_conditions["up_to_date"] = True
     startup_conditions["no_excessive_actuation"] = params.get("Offroad_ExcessiveActuation") is None
     startup_conditions["not_uninstalling"] = not params.get_bool("DoUninstall")
     startup_conditions["accepted_terms"] = params.get("HasAcceptedTerms") == terms_version

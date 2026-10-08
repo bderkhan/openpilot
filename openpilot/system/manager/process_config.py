@@ -1,7 +1,6 @@
 import os
 import operator
 import platform
-from bkv_bench import restrict_processes
 
 from opendbc.car.structs import car
 from openpilot.cereal import custom
@@ -123,7 +122,6 @@ procs = [
   PythonProcess("timed", "openpilot.system.timed", always_run, enabled=not PC),
 
   PythonProcess("modeld", "openpilot.selfdrive.modeld.modeld", and_(only_onroad, is_stock_model)),
-  PythonProcess("dmonitoringmodeld", "openpilot.selfdrive.modeld.dmonitoringmodeld", driverview, enabled=(WEBCAM or not PC)),
 
   PythonProcess("sensord", "openpilot.system.sensord.sensord", only_onroad, enabled=not PC),
   PythonProcess("ui", "openpilot.selfdrive.ui.ui", always_run),
@@ -137,7 +135,6 @@ procs = [
   PythonProcess("selfdrived", "openpilot.selfdrive.selfdrived.selfdrived", only_onroad),
   PythonProcess("card", "openpilot.selfdrive.car.card", only_onroad),
   PythonProcess("deleter", "openpilot.system.loggerd.deleter", always_run),
-  PythonProcess("dmonitoringd", "openpilot.selfdrive.monitoring.dmonitoringd", driverview, enabled=(WEBCAM or not PC)),
   PythonProcess("qcomgpsd", "openpilot.system.qcomgpsd.qcomgpsd", qcomgps, enabled=COMMA_HARDWARE),
   PythonProcess("pandad", "openpilot.selfdrive.pandad.pandad", always_run),
   PythonProcess("paramsd", "openpilot.selfdrive.locationd.paramsd", only_onroad),
@@ -151,7 +148,6 @@ procs = [
   PythonProcess("hardwared", "openpilot.system.hardware.hardwared", always_run),
   PythonProcess("modem", "openpilot.common.hardware.comma.modem", always_run, enabled=COMMA_HARDWARE),
   PythonProcess("tombstoned", "openpilot.system.tombstoned", always_run, enabled=not PC),
-  PythonProcess("updated", "openpilot.system.updated.updated", only_offroad, enabled=not PC),
   PythonProcess("uploader", "openpilot.system.loggerd.uploader", uploader_ready),
   PythonProcess("statsd", "openpilot.sunnypilot.system.statsd", always_run),
 
@@ -197,4 +193,4 @@ if os.path.exists("../../third_party/copyparty/copyparty-sfx.py"):
   copyparty_args += ["-q"]
   procs += [NativeProcess("copyparty-sfx", "openpilot/third_party/copyparty", ["./copyparty-sfx.py", *copyparty_args], and_(only_offroad, use_copyparty))]
 
-managed_processes = {p.name: p for p in restrict_processes(procs)}
+managed_processes = {p.name: p for p in procs}

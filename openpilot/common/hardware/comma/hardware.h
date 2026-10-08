@@ -48,7 +48,7 @@ public:
   }
 
   static void set_ir_power(int percent) {
-    // Bench startup resets LEDs once; no stock controller may drive them later.
+    (void)percent;
     return;
   }
 

@@ -108,7 +108,6 @@ class HardwareComma(HardwareBase):
       return int(f.read())
 
   def set_ir_power(self, percent: int):
-    # Startup resets LEDs once; stock control must not overwrite the new bench algorithm.
     return
 
   def get_network_type(self):
