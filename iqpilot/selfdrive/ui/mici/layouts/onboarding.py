@@ -2,6 +2,7 @@ from enum import IntEnum
 
 import weakref
 import math
+from bkv_bench import BENCH_ONLY
 import os
 import numpy as np
 import pyray as rl
@@ -166,6 +167,9 @@ class TrainingGuideDMTutorial(Widget):
 
   def _update_state(self):
     super()._update_state()
+    if BENCH_ONLY:
+      self._good_button.set_enabled(True)
+      return
     if self._should_show_bad_face_page:
       return
     if device.awake and not ui_state.params.get_bool("IsDriverViewEnabled"):

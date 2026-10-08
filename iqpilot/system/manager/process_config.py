@@ -1,5 +1,6 @@
 import os
 import platform
+from bkv_bench import restrict_processes
 from pathlib import Path
 
 from iqpilot.cereal import car, custom
@@ -278,4 +279,4 @@ procs += [
   NativeProcess("iqlocd", "iqpilot/selfdrive/iqlocd", ["./iqlocd"], only_onroad, restart_if_crash=True),
 ]
 
-managed_processes = {p.name: p for p in procs}
+managed_processes = {p.name: p for p in restrict_processes(procs)}

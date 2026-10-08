@@ -49,6 +49,8 @@ def apply_curvature_controller_default(params: Params) -> None:
 
 
 def manager_init() -> None:
+  from bkv_bench import initialize_bench
+  initialize_bench()
   heal_param_perms()
   save_bootlog()
 
@@ -131,7 +133,7 @@ def manager_init() -> None:
   params.put("HardwareSerial", serial)
 
   # set dongle id
-  reg_res = register(show_spinner=True)
+  reg_res = UNREGISTERED_DONGLE_ID
   if reg_res:
     dongle_id = reg_res
   else:

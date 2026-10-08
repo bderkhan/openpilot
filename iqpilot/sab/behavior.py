@@ -409,7 +409,7 @@ class SteeringAssistanceBehavior:
       return None
     if not getattr(cs, "started", False):
       return None
-    if getattr(cs, "doorOpen", False) or getattr(cs, "seatbeltUnlatched", False):
+    if getattr(cs, "doorOpen", False):
       return None
     parked_or_reverse = getattr(cs, "gearShifter", _GEAR.unknown) in (_GEAR.park, _GEAR.reverse)
     return None if parked_or_reverse else verb

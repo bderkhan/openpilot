@@ -1,0 +1,10 @@
+{
+  "binary": "iqpilot/selfdrive/pandad/pandad",
+  "base": "348658b0e7c0bb4538ae757f3b3a896fb3de8429",
+  "original_sha256": "e5de0806e69ab28ce3c954457bcc18453337152d2070e12a5d82692f21e73f58",
+  "bench_sha256": "7042d94aa9e114eece5985c5ebbca4e5e54d97dce85f94b77e9e2d7e7bcee720",
+  "main_file_offset": 401952,
+  "entry_address": 401952,
+  "exit_instructions": "c0098052a80b80d2010000d4",
+  "verified_exit_status": 78
+}

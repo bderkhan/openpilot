@@ -77,6 +77,8 @@ def check_panda_support(panda) -> bool:
 
 
 def main() -> None:
+  from bkv_bench import require_process
+  require_process("pandad")
   os.environ["IQPILOT_PANDA_FW_PATH"] = FW_PATH
 
   # signal pandad to close the relay and exit
