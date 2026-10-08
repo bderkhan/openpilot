@@ -68,6 +68,8 @@ def flash_panda(panda_serial: str) -> Panda:
 
 
 def main() -> None:
+  from bkv_bench import require_process
+  require_process("pandad")
   # signal pandad to close the relay and exit
   def signal_handler(signum, frame):
     cloudlog.info(f"Caught signal {signum}, exiting")

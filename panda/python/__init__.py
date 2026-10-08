@@ -720,6 +720,8 @@ class Panda:
     self._handle.controlWrite(Panda.REQUEST_OUT, 0xe7, int(power_save_enabled), 0, b'')
 
   def set_safety_mode(self, mode=CarParams.SafetyModel.silent, param=0):
+    if mode != CarParams.SafetyModel.silent or param != 0:
+      raise RuntimeError("BKV bench permits only silent Panda safety mode")
     self._handle.controlWrite(Panda.REQUEST_OUT, 0xdc, mode, param, b'')
 
   def set_obd(self, obd):
@@ -730,6 +732,8 @@ class Panda:
     self._handle.controlWrite(Panda.REQUEST_OUT, 0xe5, int(enable), 0, b'')
 
   def set_can_enable(self, bus_num, enable):
+    if enable:
+      raise RuntimeError("BKV bench cannot enable physical CAN transceivers")
     # sets the can transceiver enable pin
     self._handle.controlWrite(Panda.REQUEST_OUT, 0xf4, int(bus_num), int(enable), b'')
 
@@ -767,14 +771,10 @@ class Panda:
 
   @ensure_can_packet_version
   def can_send_many(self, arr, *, fd=False, timeout=CAN_SEND_TIMEOUT_MS):
-    snds = pack_can_buffer(arr, fd=fd)
-    for tx in snds:
-      while len(tx) > 0:
-        bs = self._handle.bulkWrite(3, tx, timeout=timeout)
-        tx = tx[bs:]
+    raise RuntimeError("BKV bench cannot transmit CAN")
 
   def can_send(self, addr, dat, bus, *, fd=False, timeout=CAN_SEND_TIMEOUT_MS):
-    self.can_send_many([[addr, dat, bus]], fd=fd, timeout=timeout)
+    raise RuntimeError("BKV bench cannot transmit CAN")
 
   @ensure_can_packet_version
   def can_recv(self):
@@ -820,6 +820,8 @@ class Panda:
     return ret
 
   def send_heartbeat(self, engaged=True, engaged_mads=True):
+    if engaged or engaged_mads:
+      raise RuntimeError("BKV bench cannot report vehicle controls engaged")
     self._handle.controlWrite(Panda.REQUEST_OUT, 0xf3, engaged, engaged_mads, b'')
 
   # disable heartbeat checks for use outside of openpilot
@@ -834,7 +836,7 @@ class Panda:
 
   # ******************* IR *******************
   def set_ir_power(self, percentage):
-    self._handle.controlWrite(Panda.REQUEST_OUT, 0xb0, int(percentage), 0, b'')
+    self._handle.controlWrite(Panda.REQUEST_OUT, 0xb0, 0, 0, b'')
 
   # ******************* Fan ******************
   def set_fan_power(self, percentage):

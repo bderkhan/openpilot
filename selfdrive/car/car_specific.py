@@ -135,8 +135,7 @@ class CarSpecificEvents:
 
     if CS.doorOpen:
       events.add(EventName.doorOpen)
-    if CS.seatbeltUnlatched:
-      events.add(EventName.seatbeltNotLatched)
+    # This fixed bench branch has no vehicle-control or Panda transmitter processes.
     if CS.gearShifter != GearShifter.drive and (extra_gears is None or
        CS.gearShifter not in extra_gears):
       events.add(EventName.wrongGear)

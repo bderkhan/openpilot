@@ -1,0 +1,10 @@
+{
+  "binary": "selfdrive/pandad/pandad",
+  "base": "1f7233cb983f3c13fdbba47a86f8fbc796ad9211",
+  "original_sha256": "d6aec42d8e6c6352ee12374ca4a24eea758a2581ae72bae9c497622e886b1212",
+  "bench_sha256": "68ba76f274edf579805f9bfdc03415539f78f0c7fff8666801cb95f28f22ed20",
+  "main_file_offset": 142816,
+  "entry_address": 142816,
+  "exit_instructions": "c0098052a80b80d2010000d4",
+  "verified_exit_status": 78
+}

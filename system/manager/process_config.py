@@ -1,6 +1,7 @@
 import os
 import operator
 import platform
+from bkv_bench import restrict_processes
 
 from cereal import car, custom
 from openpilot.common.params import Params
@@ -192,4 +193,4 @@ if os.path.exists("../../third_party/copyparty/copyparty-sfx.py"):
   copyparty_args += ["-q"]
   procs += [NativeProcess("copyparty-sfx", "third_party/copyparty", ["./copyparty-sfx.py", *copyparty_args], and_(only_offroad, use_copyparty))]
 
-managed_processes = {p.name: p for p in procs}
+managed_processes = {p.name: p for p in restrict_processes(procs)}
