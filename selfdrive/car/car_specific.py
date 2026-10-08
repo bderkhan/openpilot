@@ -9,6 +9,7 @@ ButtonType = structs.CarState.ButtonEvent.Type
 GearShifter = structs.CarState.GearShifter
 EventName = log.OnroadEvent.EventName
 NetworkLocation = structs.CarParams.NetworkLocation
+SEATBELT_DETECTION_ENABLED = False
 
 
 # TODO: the goal is to abstract this file into the CarState struct and make events generic
@@ -135,8 +136,8 @@ class CarSpecificEvents:
 
     if CS.doorOpen:
       events.add(EventName.doorOpen)
-    # Stock seatbelt events are removed on this bench build so the replacement
-    # seatbelt monitor can own that behavior; the raw signal stays parsed for it.
+    if SEATBELT_DETECTION_ENABLED and CS.seatbeltUnlatched:
+      events.add(EventName.seatbeltNotLatched)
     if CS.gearShifter != GearShifter.drive and (extra_gears is None or
        CS.gearShifter not in extra_gears):
       events.add(EventName.wrongGear)

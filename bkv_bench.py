@@ -15,6 +15,16 @@ from pathlib import Path
 
 BENCH_ONLY = True
 ACK_ENV = "BKV_ISOLATED_BENCH"
+# The bench runs offline with the updater disabled, so upstream's
+# connectivity/update lockout (which blocks going onroad after ~a month
+# without a successful update check) must never apply here.
+UPDATES_DISABLED = True
+# Saved offline/update warnings from a previous stock install are cleared at
+# bench startup so they neither block startup nor linger in the offroad UI.
+STALE_UPDATE_KEYS = (
+  "Offroad_ConnectivityNeeded", "Offroad_ConnectivityNeededPrompt",
+  "Offroad_UpdateFailed", "LastUpdateException",
+)
 # Stock driver-monitoring processes never run on the bench. The updater stays
 # off because the bench launcher never installs or swaps software. Every other
 # upstream process, including pandad/card/controlsd/selfdrived, runs stock.
@@ -94,9 +104,26 @@ def verify_pandas(panda_class):
   return direct_leds_required
 
 
+def clear_stale_update_alerts():
+  try:
+    if (Path(__file__).resolve().parent / "iqpilot").exists():
+      from iqpilot.common.params import Params
+    else:
+      from openpilot.common.params import Params
+  except Exception:
+    return
+  try:
+    params = Params()
+    for key in STALE_UPDATE_KEYS:
+      params.remove(key)
+  except Exception:
+    pass
+
+
 def initialize_bench():
   require_acknowledgment()
   require_no_vehicle_services()
+  clear_stale_update_alerts()
   from panda import Panda
 
   root = Path(__file__).resolve().parent

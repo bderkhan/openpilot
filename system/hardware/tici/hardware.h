@@ -13,6 +13,8 @@
 
 class HardwareTici : public HardwareNone {
 public:
+  static constexpr bool IR_BLASTER_ENABLED = false;
+
   static bool TICI() { return true; }
   static bool AGNOS() { return true; }
   static std::string get_os_version() {
@@ -67,8 +69,21 @@ public:
   }
 
   static void set_ir_power(int percent) {
-    // Bench startup resets LEDs once; no stock controller may drive them later.
-    return;
+    if (!IR_BLASTER_ENABLED) {
+      (void)percent;
+      return;
+    }
+
+    auto device = get_device_type();
+    if (device == cereal::InitData::DeviceType::TICI ||
+        device == cereal::InitData::DeviceType::TIZI) {
+      return;
+    }
+
+    int value = util::map_val(std::clamp(percent, 0, 100), 0, 100, 0, 300);
+    std::ofstream("/sys/class/leds/led:switch_2/brightness") << 0 << "\n";
+    std::ofstream("/sys/class/leds/led:torch_2/brightness") << value << "\n";
+    std::ofstream("/sys/class/leds/led:switch_2/brightness") << value << "\n";
   }
 
   static std::map<std::string, std::string> get_init_logs() {
