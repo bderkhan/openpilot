@@ -22,8 +22,6 @@ from openpilot.system.hardware.hw import Paths
 
 
 def manager_init() -> None:
-  from bkv_bench import initialize_bench
-  initialize_bench()
   save_bootlog()
 
   build_metadata = get_build_metadata()
