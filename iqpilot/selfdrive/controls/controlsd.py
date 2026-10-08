@@ -38,7 +38,6 @@ State = log.SelfdriveState.OpenpilotState
 EventName = log.OnroadEvent.EventName
 LaneChangeState = log.LaneChangeState
 LaneChangeDirection = log.LaneChangeDirection
-STOCK_DRIVER_MONITORING_ENABLED = False
 
 ACTUATOR_FIELDS = tuple(car.CarControl.Actuators.schema.fields.keys())
 CTRL_ESSENTIAL_SERVICES = ("carState", "modelV2", "longitudinalPlan", "vehicleParameters", "selfdriveState")
@@ -69,7 +68,7 @@ class Controls(IQControlsLayer):
 
     self.sm = messaging.SubMaster(['lateralDelay', 'vehicleParameters', 'lateralTorqueParameters', 'modelV2', 'selfdriveState',
                                    'extrinsicsCalibration', 'deviceMotion', 'longitudinalPlan', 'lateralManeuverPlan',
-                                   'carState', 'carOutput', 'driverMonitoringState', 'onroadEvents',
+                                   'carState', 'carOutput', 'onroadEvents',
                                    'driverAssistance', 'lateralDelay'] + self.iq_sub_services,
                                   poll='selfdriveState')
     self.pm = messaging.PubMaster(['carControl', 'controlsState', 'iqPerfTrace'] + self.iq_pub_services)
@@ -368,8 +367,7 @@ class Controls(IQControlsLayer):
     cs.upAccelCmd = float(self.LoC.pid.p)
     cs.uiAccelCmd = float(self.LoC.pid.i)
     cs.ufAccelCmd = float(self.LoC.pid.f)
-    cs.forceDecel = bool((STOCK_DRIVER_MONITORING_ENABLED and self.sm['driverMonitoringState'].awarenessStatus < 0.) or
-                         (self.sm['selfdriveState'].state == State.softDisabling))
+    cs.forceDecel = bool(self.sm['selfdriveState'].state == State.softDisabling)
 
     lat_tuning = self.CP.lateralTuning.which()
     if self.CP.steerControlType in (car.CarParams.SteerControlType.angle, car.CarParams.SteerControlType.curvatureDEPRECATED):

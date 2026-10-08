@@ -49,8 +49,6 @@ def apply_curvature_controller_default(params: Params) -> None:
 
 
 def manager_init() -> None:
-  from bkv_bench import initialize_bench
-  initialize_bench()
   heal_param_perms()
   save_bootlog()
 

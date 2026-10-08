@@ -2,8 +2,6 @@
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
 
-exec bash "$DIR/launch_bkv_bench.sh"
-
 export HOME="${HOME:-/home/comma}"
 export IQPILOT_PROPRIETARY_ROOT="$DIR/artifacts"
 source "$DIR/launch_env.sh"

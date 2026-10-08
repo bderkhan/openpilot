@@ -1,5 +1,4 @@
 import importlib
-from bkv_bench import require_process
 import os
 import signal
 import time
@@ -36,7 +35,6 @@ except ModuleNotFoundError:
 
 
 def launcher(proc: str, name: str) -> None:
-  require_process(name)
   try:
     # import the process
     mod = importlib.import_module(proc)
@@ -63,7 +61,6 @@ def launcher(proc: str, name: str) -> None:
 
 
 def nativelauncher(pargs: list[str], cwd: str, name: str) -> None:
-  require_process(name)
   os.environ['MANAGER_DAEMON'] = name
 
   # exec the process
@@ -179,7 +176,6 @@ class NativeProcess(ManagerProcess):
     pass
 
   def start(self) -> None:
-    require_process(self.name)
     # In case we only tried a non blocking stop we need to stop it before restarting
     if self.shutting_down:
       self.stop()
@@ -244,7 +240,6 @@ class BundleProcess(NativeProcess):
     )
 
   def start(self) -> None:
-    require_process(self.name)
     if self.proc is None:
       _normalize_bundle_modes(self.bundle)
     super().start()
@@ -269,7 +264,6 @@ class PythonProcess(ManagerProcess):
       importlib.import_module(self.module)
 
   def start(self) -> None:
-    require_process(self.name)
     # In case we only tried a non blocking stop we need to stop it before restarting
     if self.shutting_down:
       self.stop()

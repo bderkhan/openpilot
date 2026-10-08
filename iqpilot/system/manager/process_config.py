@@ -1,6 +1,5 @@
 import os
 import platform
-from bkv_bench import restrict_processes
 from pathlib import Path
 
 from iqpilot.cereal import car, custom
@@ -202,8 +201,6 @@ procs = [
                 enabled=TICI, restart_if_crash=True),
   BundleProcess("navassistd", "iqpilot_navassist_private", "iqpilot_private.navassist.daemon", nav_assist, enabled=TICI, restart_if_crash=True),
 
-  PythonProcess("dmonitoringmodeld", "iqpilot.selfdrive.dmonitoringmodeld.dmonitoringmodeld", driver_monitoring, enabled=not PC),
-
   PythonProcess("sensord", "iqpilot.system.sensord.sensord", only_onroad, enabled=not PC),
   PythonProcess("ui", "iqpilot.selfdrive.ui.ui", not_low_power, restart_if_crash=True),
   PythonProcess("soundd", "iqpilot.selfdrive.ui.soundd", driverview),
@@ -215,7 +212,6 @@ procs = [
   PythonProcess("selfdrived", "iqpilot.selfdrive.selfdrived.selfdrived", only_onroad),
   PythonProcess("card", "iqpilot.selfdrive.car.card", only_onroad),
   PythonProcess("deleter", "iqpilot.system.loggerd.deleter", always_run),
-  PythonProcess("dmonitoringd", "iqpilot.selfdrive.monitoring.dmonitoringd", driver_monitoring, enabled=not PC),
   PythonProcess("qcomgpsd", "iqpilot.system.qcomgpsd.qcomgpsd", qcomgps, enabled=TICI),
   PythonProcess("phonegpsd", "iqpilot.system.phonegps.phonegpsd", only_onroad, enabled=TICI),
   PythonProcess("pandad", "iqpilot.selfdrive.pandad.pandad", always_run),
@@ -228,7 +224,6 @@ procs = [
   PythonProcess("radard", "iqpilot.selfdrive.controls.radard", only_onroad),
   PythonProcess("hardwared", "iqpilot.system.hardware.hardwared", always_run, restart_if_crash=True),
   PythonProcess("tombstoned", "iqpilot.system.tombstoned", always_run, enabled=not PC),
-  PythonProcess("updated", "iqpilot.system.updated.updated", and_(only_offroad, not_low_power), enabled=not PC),
   BundleProcess("iquploaderd", "iqpilot_hephaestusd_private", "iqpilot_private.konn3kt.uploaderd.iquploaderd",
                 and_(iquploaderd_ready, not_low_power), restart_if_crash=True),
   BundleProcess("iqtelemetryd", "iqpilot_hephaestusd_private", "iqpilot_private.konn3kt.telemetry.iqtelemetryd",
@@ -279,4 +274,4 @@ procs += [
   NativeProcess("iqlocd", "iqpilot/selfdrive/iqlocd", ["./iqlocd"], only_onroad, restart_if_crash=True),
 ]
 
-managed_processes = {p.name: p for p in restrict_processes(procs)}
+managed_processes = {p.name: p for p in procs}

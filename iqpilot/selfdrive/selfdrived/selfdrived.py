@@ -36,7 +36,6 @@ from iqpilot.selfdrive.selfdrived.iq_events import IQEvents
 REPLAY = "REPLAY" in os.environ
 SIMULATION = "SIMULATION" in os.environ
 TESTING_CLOSET = "TESTING_CLOSET" in os.environ
-STOCK_DRIVER_MONITORING_ENABLED = False
 
 WIDE_CAM_FAULTY_ALERT_FRAMES = int(300. / DT_CTRL)
 
@@ -105,17 +104,15 @@ class SelfdriveD(GapButtonActions):
     self.car_state_sock = messaging.sub_sock('carState', timeout=20)
 
     ignore = self.sensor_packets + self.gps_packets + ['alertDebug', 'lateralManeuverPlan', 'iqDriveModelData', 'iqNavState', 'vehicleParameters', 'driverAssistance', 'testJoystick']
-    if not STOCK_DRIVER_MONITORING_ENABLED:
-      ignore += ['driverMonitoringState']
     if os.path.exists('/tmp/lite_hw'):
-      ignore += ['driverCameraState', 'driverMonitoringState']
+      ignore += ['driverCameraState']
     if SIMULATION:
       ignore += ['driverCameraState', 'managerState']
     if REPLAY:
       # no vipc in replay will make them ignored anyways
       ignore += ['roadCameraState', 'wideRoadCameraState', 'userBookmark', 'iqPlan']
     self.sm = messaging.SubMaster(['deviceState', 'pandaStates', 'peripheralState', 'modelV2', 'extrinsicsCalibration',
-                                   'carOutput', 'driverMonitoringState', 'longitudinalPlan', 'deviceMotion', 'lateralDelay',
+                                   'carOutput', 'longitudinalPlan', 'deviceMotion', 'lateralDelay',
                                    'managerState', 'vehicleParameters', 'radarState', 'lateralTorqueParameters',
                                    'controlsState', 'carControl', 'driverAssistance', 'alertDebug', 'userBookmark', 'audioFeedback',
                                    'lateralManeuverPlan',
@@ -185,7 +182,6 @@ class SelfdriveD(GapButtonActions):
 
     self.events_iq = IQEvents()
     self.events_iq_prev = []
-    self._cached_dm_event_names: tuple[int, ...] = ()
     self._cached_plan_event_names: tuple[int, ...] = ()
     self._cached_model_event_names: tuple[int, ...] = ()
     self._cached_nav_event_names: tuple[int, ...] = ()
@@ -206,14 +202,6 @@ class SelfdriveD(GapButtonActions):
   def _refresh_cached_plan_events(self) -> None:
     if self.sm.updated['iqPlan']:
       self._cached_plan_event_names = tuple(event.name.raw for event in self._get_longitudinal_plan_ext().events)
-
-  def _refresh_cached_dm_events(self) -> None:
-    if not STOCK_DRIVER_MONITORING_ENABLED:
-      self._cached_dm_event_names = ()
-      return
-
-    if self.sm.updated['driverMonitoringState']:
-      self._cached_dm_event_names = tuple(event.name.raw for event in self.sm['driverMonitoringState'].events)
 
   def _refresh_cached_model_events(self) -> None:
     if not self.sm.updated['iqDriveModelData']:
@@ -333,8 +321,6 @@ class SelfdriveD(GapButtonActions):
       self.events.add(EventName.resumeBlocked)
 
     if not self.CP.notCar:
-      self._refresh_cached_dm_events()
-      self._add_event_names(self._cached_dm_event_names)
       self._refresh_cached_plan_events()
       self._add_iq_event_names(self._cached_plan_event_names)
 
