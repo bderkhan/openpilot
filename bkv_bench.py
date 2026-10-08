@@ -87,21 +87,20 @@ def require_no_vehicle_services(root=Path("/proc")):
       raise RuntimeError(f"Stop existing vehicle/stock DM service before bench startup: PID {directory.name}")
 
 
-def verify_pandas(panda_class):
-  # The simulator rig must have its Panda connected and healthy. Safety mode,
-  # CAN transceivers, fan control, and all communication stay under normal
-  # pandad/panda control; this preflight only confirms hardware and keeps IR off.
+def bench_panda_preflight(panda_class):
+  # Opportunistic hardware pass: zero stock IR on any connected Pandas. Missing
+  # hardware is NOT fatal — this mirrors a normal comma install, where manager
+  # boots to the offroad UI and stock pandad handles harness detection, bootstub
+  # firmware, safety modes, and CAN on its own schedule.
   serials = panda_class.list()
-  if not serials:
-    raise RuntimeError("No Panda detected for the bench simulator")
   direct_leds_required = False
   for serial in serials:
     with panda_class(serial, cli=False, disable_checks=False) as panda:
       if panda.bootstub:
-        raise RuntimeError("Panda is in bootstub; bench startup will not flash firmware")
+        continue  # stock pandad handles bootstub firmware as in a normal install
       panda.set_ir_power(0)
       direct_leds_required |= panda.get_type() == panda_class.HW_TYPE_CUATRO
-  return direct_leds_required
+  return bool(serials), direct_leds_required
 
 
 def clear_stale_update_alerts():
@@ -134,7 +133,7 @@ def initialize_bench():
   if not Path(inspect.getfile(Panda)).resolve().is_relative_to(panda_root):
     raise RuntimeError("Bench must use this checkout's confined Panda API")
 
-  required = verify_pandas(Panda)
+  required = bench_panda_preflight(Panda)
   reset_direct_leds(required=required)
   print("BKV BENCH ONLY: stock CAN/vehicle control intact; stock DM, seatbelt events, and IR disabled.", flush=True)
 

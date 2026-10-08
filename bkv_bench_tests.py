@@ -165,9 +165,11 @@ class BenchTests(unittest.TestCase):
     cls.HW_TYPE_CUATRO = b"cuatro"
     return cls, panda
 
-  def test_bench_preflight_verifies_pandas_without_touching_can(self):
+  def test_bench_preflight_zeros_ir_without_touching_can(self):
     cls, panda = self.fake_pandas()
-    self.assertTrue(bench.verify_pandas(cls))
+    seen, leds_required = bench.bench_panda_preflight(cls)
+    self.assertTrue(seen)
+    self.assertTrue(leds_required)
     cls.assert_called_once_with("test-board", cli=False, disable_checks=False)
     panda.set_ir_power.assert_called_once_with(0)
     panda.set_safety_mode.assert_not_called()
@@ -176,14 +178,18 @@ class BenchTests(unittest.TestCase):
     panda.can_clear.assert_not_called()
     panda.health.assert_not_called()
 
-  def test_missing_or_bootstub_panda_stops_startup(self):
-    cls, _ = self.fake_pandas(bootstub=True)
-    with self.assertRaises(RuntimeError):
-      bench.verify_pandas(cls)
+  def test_missing_or_bootstub_panda_is_not_fatal(self):
+    # A normal comma boots without the harness connected; pandad connects later.
+    cls, panda = self.fake_pandas(bootstub=True)
+    seen, leds_required = bench.bench_panda_preflight(cls)
+    self.assertTrue(seen)
+    self.assertFalse(leds_required)
+    panda.set_ir_power.assert_not_called()  # bootstub firmware is stock pandad's job
     cls, _ = self.fake_pandas()
     cls.list.return_value = []
-    with self.assertRaises(RuntimeError):
-      bench.verify_pandas(cls)
+    seen, leds_required = bench.bench_panda_preflight(cls)
+    self.assertFalse(seen)
+    self.assertFalse(leds_required)
 
   def test_existing_vehicle_service_prevents_startup(self):
     with tempfile.TemporaryDirectory() as temp:
@@ -230,14 +236,14 @@ class BenchTests(unittest.TestCase):
     with patch.dict(os.environ, {bench.ACK_ENV: "1"}), patch.dict("sys.modules", {"panda": SimpleNamespace(Panda=Mock())}):
       with patch.object(bench, "require_no_vehicle_services"), patch.object(bench.hashlib, "sha256") as sha:
         sha.return_value.hexdigest.return_value = "unexpected"
-        with patch.object(bench, "verify_pandas") as verify, self.assertRaisesRegex(RuntimeError, "executable changed"):
+        with patch.object(bench, "bench_panda_preflight") as verify, self.assertRaisesRegex(RuntimeError, "executable changed"):
           bench.initialize_bench()
         verify.assert_not_called()
 
   def test_wrong_panda_package_prevents_startup(self):
     with patch.dict(os.environ, {bench.ACK_ENV: "1"}), patch.dict("sys.modules", {"panda": SimpleNamespace(Panda=Mock())}):
       with patch.object(bench, "require_no_vehicle_services"), patch.object(bench.inspect, "getfile", return_value="/tmp/other/panda.py"):
-        with patch.object(bench, "verify_pandas") as verify, self.assertRaisesRegex(RuntimeError, "confined Panda API"):
+        with patch.object(bench, "bench_panda_preflight") as verify, self.assertRaisesRegex(RuntimeError, "confined Panda API"):
           bench.initialize_bench()
         verify.assert_not_called()
 
