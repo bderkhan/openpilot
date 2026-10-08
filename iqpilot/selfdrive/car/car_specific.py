@@ -93,7 +93,8 @@ class CarSpecificEvents:
 
     if CS.doorOpen:
       events.add(EventName.doorOpen)
-    # This fixed bench branch has no vehicle-control or Panda transmitter processes.
+    # Stock seatbelt events are removed on this bench build so the replacement
+    # seatbelt monitor can own that behavior; the raw signal stays parsed for it.
     if CS.gearShifter != GearShifter.drive and CS.gearShifter not in CI.DRIVABLE_GEARS:
       events.add(EventName.wrongGear)
     if CS.gearShifter == GearShifter.reverse:

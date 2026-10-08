@@ -1,4 +1,11 @@
-"""Fixed, local-only bench policy. This branch cannot run vehicle control."""
+"""Fixed, local-only bench policy.
+
+Stock CAN communication, Panda safety modes, and the normal vehicle-control and
+engagement state machine stay fully intact so the physical simulator rig works.
+Only the stock driver monitoring, stock seatbelt events, and stock IR/LED output
+are removed, as requested, so the replacement monitoring/illumination software
+can be developed against this build.
+"""
 import hashlib
 import inspect
 import json
@@ -8,11 +15,11 @@ from pathlib import Path
 
 BENCH_ONLY = True
 ACK_ENV = "BKV_ISOLATED_BENCH"
-ALLOWED_PROCESSES = frozenset({
-  "camerad", "webcamerad", "sensord", "ui", "raylib_ui", "logmessaged",
-  "loggerd", "encoderd", "logcatd", "journald", "proclogd", "tombstoned",
-  "modeld", "modeld_snpe", "modeld_tinygrad", "iqmodeld",
-  "calibrationd", "locationd", "locationd_llk", "iqlocd", "radard", "plannerd",
+# Stock driver-monitoring processes never run on the bench. The updater stays
+# off because the bench launcher never installs or swaps software. Every other
+# upstream process, including pandad/card/controlsd/selfdrived, runs stock.
+BENCH_DISABLED_PROCESSES = frozenset({
+  "dmonitoringd", "dmonitoringmodeld", "updated",
 })
 
 
@@ -21,23 +28,23 @@ def never_run(*args, **kwargs):
 
 
 def restrict_processes(processes):
-  # New upstream services are denied until explicitly reviewed for bench use.
+  # Only the requested removals are enforced; the simulator needs everything else.
   for process in processes:
-    if process.name not in ALLOWED_PROCESSES:
+    if process.name in BENCH_DISABLED_PROCESSES:
       process.enabled = False
       process.should_run = never_run
   return processes
 
 
 def require_process(name):
-  if name not in ALLOWED_PROCESSES:
-    raise RuntimeError(f"BKV bench refuses process: {name}")
+  if name in BENCH_DISABLED_PROCESSES:
+    raise RuntimeError(f"BKV bench refuses stock process: {name}")
 
 
 def require_acknowledgment(environ=None):
   environ = os.environ if environ is None else environ
   if environ.get(ACK_ENV) != "1":
-    raise RuntimeError("Bench only: isolate from vehicles and set BKV_ISOLATED_BENCH=1")
+    raise RuntimeError("Bench only: isolate from driving and set BKV_ISOLATED_BENCH=1")
 
 
 def reset_direct_leds(root=Path("/sys/class/leds"), required=False):
@@ -52,6 +59,10 @@ def reset_direct_leds(root=Path("/sys/class/leds"), required=False):
 
 
 def require_no_vehicle_services(root=Path("/proc")):
+  # Preflight only: a leftover stock manager (or its children) must be stopped
+  # before the bench manager starts, so two processes never fight over the
+  # Panda or the same message topics. The bench build itself starts its own
+  # normal pandad/card/controlsd after this check.
   if not root.is_dir():
     raise RuntimeError("Bench hardware preflight requires Linux /proc")
   blocked = re.compile(r"\b(pandad|card|controlsd|joystickd|maneuversd|dmonitoringd|dmonitoringmodeld)\b")
@@ -66,26 +77,20 @@ def require_no_vehicle_services(root=Path("/proc")):
       raise RuntimeError(f"Stop existing vehicle/stock DM service before bench startup: PID {directory.name}")
 
 
-def quiet_pandas(panda_class):
+def verify_pandas(panda_class):
+  # The simulator rig must have its Panda connected and healthy. Safety mode,
+  # CAN transceivers, fan control, and all communication stay under normal
+  # pandad/panda control; this preflight only confirms hardware and keeps IR off.
   serials = panda_class.list()
   if not serials:
-    raise RuntimeError("No Panda detected; cannot verify hardware isolation")
+    raise RuntimeError("No Panda detected for the bench simulator")
   direct_leds_required = False
   for serial in serials:
     with panda_class(serial, cli=False, disable_checks=False) as panda:
       if panda.bootstub:
         raise RuntimeError("Panda is in bootstub; bench startup will not flash firmware")
-      panda.set_safety_mode()
-      for bus in range(3):
-        panda.can_clear(bus)
-        panda.set_can_enable(bus, False)
       panda.set_ir_power(0)
-      # No stock pandad is running, so retain full cooling throughout the test.
-      panda.set_fan_power(100)
       direct_leds_required |= panda.get_type() == panda_class.HW_TYPE_CUATRO
-      health = panda.health()
-      if int(health["safety_mode"]) != 0 or health["controls_allowed"]:
-        raise RuntimeError("Panda did not enter silent, non-actuating mode")
   return direct_leds_required
 
 
@@ -102,9 +107,9 @@ def initialize_bench():
   if not Path(inspect.getfile(Panda)).resolve().is_relative_to(panda_root):
     raise RuntimeError("Bench must use this checkout's confined Panda API")
 
-  required = quiet_pandas(Panda)
+  required = verify_pandas(Panda)
   reset_direct_leds(required=required)
-  print("BKV BENCH ONLY: CAN disabled, stock DM/seatbelt events/IR disabled.", flush=True)
+  print("BKV BENCH ONLY: stock CAN/vehicle control intact; stock DM, seatbelt events, and IR disabled.", flush=True)
 
 
 if __name__ == "__main__":

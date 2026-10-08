@@ -5,7 +5,6 @@ import json
 import os
 from pathlib import Path
 import platform
-import struct
 import subprocess
 import tempfile
 from types import SimpleNamespace
@@ -39,12 +38,18 @@ class BenchTests(unittest.TestCase):
         bench.require_acknowledgment({bench.ACK_ENV: value})
     bench.require_acknowledgment({bench.ACK_ENV: "1"})
 
-  def test_unknown_processes_fail_closed(self):
-    processes = [SimpleNamespace(name=name, enabled=True, should_run=lambda *a: True)
-                 for name in ("pandad", "_pandad", "card", "controlsd", "selfdrived", "joystickd",
-                              "dmonitoringd", "dmonitoringmodeld", "updated", "future_vehicle_writer")]
-    bench.restrict_processes(processes)
-    for process in processes:
+  def test_only_requested_removals_are_enforced(self):
+    preserved = [SimpleNamespace(name=name, enabled=True, should_run=lambda *a: True)
+                 for name in ("pandad", "_pandad", "card", "controlsd", "selfdrived", "joystickd", "camerad", "ui")]
+    removed = [SimpleNamespace(name=name, enabled=True, should_run=lambda *a: True)
+               for name in ("dmonitoringd", "dmonitoringmodeld", "updated")]
+    bench.restrict_processes(preserved + removed)
+    for process in preserved:
+      with self.subTest(name=process.name):
+        self.assertTrue(process.enabled)
+        self.assertTrue(process.should_run(True, None, None))
+        bench.require_process(process.name)  # must not raise
+    for process in removed:
       with self.subTest(name=process.name):
         self.assertFalse(process.enabled)
         self.assertFalse(process.should_run(True, None, None))
@@ -52,15 +57,7 @@ class BenchTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
           bench.require_process(process.name)
 
-  def test_perception_preserves_upstream_enable_flags(self):
-    camera = SimpleNamespace(name="camerad", enabled=True)
-    model = SimpleNamespace(name="modeld", enabled=False)
-    bench.restrict_processes([camera, model])
-    self.assertTrue(camera.enabled)
-    self.assertFalse(model.enabled)
-    bench.require_process(camera.name)
-
-  def test_real_process_configuration_is_confined(self):
+  def test_real_process_configuration_only_disables_requested_processes(self):
     class Process:
       def __init__(self, *args, **kwargs):
         self.name = args[0]
@@ -77,15 +74,16 @@ class BenchTests(unittest.TestCase):
                      DaemonProcess=Process, BundleProcess=Process, restrict_processes=bench.restrict_processes)
     exec(compile(ast.fix_missing_locations(ast.Module(body=nodes, type_ignores=[])), "process_config", "exec"), namespace)
     actual = namespace["managed_processes"]
-    for name in ("pandad", "_pandad", "card", "controlsd", "selfdrived", "dmonitoringmodeld", "dmonitoringd", "updated"):
+    for name in ("dmonitoringmodeld", "dmonitoringd", "updated"):
       with self.subTest(name=name):
         self.assertFalse(actual[name].enabled)
         self.assertFalse(actual[name].should_run(True, None, None))
-    self.assertTrue(actual["camerad"].enabled)
-    self.assertTrue(actual["ui"].enabled)
-    for process in actual.values():
-      if process.enabled:
-        self.assertIn(process.name, bench.ALLOWED_PROCESSES)
+    for name in ("pandad", "card", "controlsd", "selfdrived", "camerad", "ui"):
+      with self.subTest(name=name):
+        self.assertTrue(actual[name].enabled)
+    self.assertTrue(actual["pandad"].should_run(True, None, None))
+    self.assertTrue(actual["card"].should_run(True, None, None))
+    self.assertTrue(actual["selfdrived"].should_run(True, None, None))
 
   def test_concrete_start_methods_cannot_bypass_policy(self):
     tree = ast.parse((SYSTEM / "manager/process.py").read_text())
@@ -96,61 +94,59 @@ class BenchTests(unittest.TestCase):
           exec(compile(ast.fix_missing_locations(ast.Module(body=[
             ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0), method
           ], type_ignores=[])), "process.start", "exec"), namespace)
-          with self.assertRaisesRegex(RuntimeError, "refuses process"):
-            namespace["start"](SimpleNamespace(name="pandad"))
+          with self.assertRaisesRegex(RuntimeError, "refuses stock process"):
+            namespace["start"](SimpleNamespace(name="dmonitoringd"))
 
-  def test_child_launchers_block_before_import_or_exec(self):
+  def test_child_launchers_block_stock_dm_before_import_or_exec(self):
     namespace = definitions(SYSTEM / "manager/process.py", {"launcher", "nativelauncher"},
                             {"require_process": bench.require_process})
     with self.assertRaises(RuntimeError):
-      namespace["launcher"]("anything", "card")
+      namespace["launcher"]("anything", "dmonitoringd")
     with self.assertRaises(RuntimeError):
-      namespace["nativelauncher"](["./pandad"], "/tmp", "_pandad")
+      namespace["nativelauncher"](["./pandad"], "/tmp", "dmonitoringmodeld")
 
   def panda_methods(self):
     namespace = definitions(PANDA, {"can_send", "can_send_many", "set_safety_mode",
                                    "set_can_enable", "set_ir_power", "send_heartbeat"},
                             {"CarParams": SimpleNamespace(SafetyModel=SimpleNamespace(silent=0)),
-                             "CAN_SEND_TIMEOUT_MS": 10, "ensure_can_packet_version": lambda fn: fn}, classes=True)
+                             "CAN_SEND_TIMEOUT_MS": 10, "ensure_can_packet_version": lambda fn: fn,
+                             "pack_can_buffer": lambda *args, **kwargs: [b"0123456789abcdef"]}, classes=True)
     methods = {name: value for name, value in namespace.items() if callable(value) and name != "ensure_can_packet_version"}
     cls = type("Panda", (), dict(methods, REQUEST_OUT=0))
     namespace["Panda"] = cls
     panda = cls()
     panda._handle = Mock()
+    panda._handle.bulkWrite.return_value = 16
+    panda.spi = False
     return panda
 
-  def test_can_transmission_never_reaches_hardware(self):
+  def test_can_transmission_reaches_hardware_stock(self):
     panda = self.panda_methods()
     for fd in (False, True):
-      with self.subTest(fd=fd), self.assertRaises(RuntimeError):
+      with self.subTest(fd=fd):
         panda.can_send(0x123, b"abc", 0, fd=fd)
-      with self.subTest(fd=fd), self.assertRaises(RuntimeError):
         panda.can_send_many([[0x123, b"abc", 0]], fd=fd, timeout=0)
-    with self.assertRaises(RuntimeError):
-      panda.can_send_many([])
-    panda._handle.bulkWrite.assert_not_called()
+    panda._handle.bulkWrite.assert_called()
     panda._handle.controlWrite.assert_not_called()
 
-  def test_only_silent_safety_and_disabled_transceivers(self):
+  def test_stock_safety_modes_and_transceivers_are_allowed(self):
     panda = self.panda_methods()
     for mode, param in ((1, 0), (2, 0), (17, 0), (0, 1)):
-      with self.subTest(mode=mode, param=param), self.assertRaises(RuntimeError):
+      with self.subTest(mode=mode, param=param):
         panda.set_safety_mode(mode, param)
-    with self.assertRaises(RuntimeError):
-      panda.set_can_enable(0, True)
-    panda._handle.controlWrite.assert_not_called()
-    panda.set_safety_mode()
-    panda.set_can_enable(0, False)
-    self.assertEqual(panda._handle.controlWrite.call_args_list[0].args[1:4], (0xdc, 0, 0))
-    self.assertEqual(panda._handle.controlWrite.call_args_list[1].args[1:4], (0xf4, 0, 0))
+    panda.set_can_enable(0, True)
+    panda.set_can_enable(1, True)
+    calls = [call.args[1:4] for call in panda._handle.controlWrite.call_args_list]
+    self.assertIn((0xdc, 1, 0), calls)
+    self.assertIn((0xf4, 0, 1), calls)
+    self.assertIn((0xf4, 1, 1), calls)
 
-  def test_engaged_heartbeat_is_rejected(self):
+  def test_engaged_heartbeat_is_stock(self):
     panda = self.panda_methods()
-    with self.assertRaises(RuntimeError):
-      panda.send_heartbeat()
-    keys = [name for name in __import__("inspect").signature(panda.send_heartbeat).parameters]
-    panda.send_heartbeat(**{name: False for name in keys})
-    self.assertEqual(panda._handle.controlWrite.call_args.args[1:4], (0xf3, False, False))
+    panda.send_heartbeat(engaged=True)
+    call = panda._handle.controlWrite.call_args
+    self.assertEqual(call.args[1], 0xf3)
+    self.assertTrue(call.args[2])
 
   def test_stock_panda_ir_is_always_zero(self):
     panda = self.panda_methods()
@@ -158,11 +154,10 @@ class BenchTests(unittest.TestCase):
       panda.set_ir_power(power)
       self.assertEqual(panda._handle.controlWrite.call_args.args[1:4], (0xb0, 0, 0))
 
-  def fake_pandas(self, health=None, bootstub=False):
+  def fake_pandas(self, bootstub=False):
     panda = Mock()
     panda.bootstub = bootstub
     panda.get_type.return_value = b"cuatro"
-    panda.health.return_value = health or dict(safety_mode=0, controls_allowed=False)
     panda.__enter__ = Mock(return_value=panda)
     panda.__exit__ = Mock(return_value=False)
     cls = Mock(return_value=panda)
@@ -170,26 +165,25 @@ class BenchTests(unittest.TestCase):
     cls.HW_TYPE_CUATRO = b"cuatro"
     return cls, panda
 
-  def test_hardware_quieting_turns_off_output_and_preserves_cooling(self):
+  def test_bench_preflight_verifies_pandas_without_touching_can(self):
     cls, panda = self.fake_pandas()
-    self.assertTrue(bench.quiet_pandas(cls))
+    self.assertTrue(bench.verify_pandas(cls))
     cls.assert_called_once_with("test-board", cli=False, disable_checks=False)
-    panda.set_safety_mode.assert_called_once_with()
-    self.assertEqual([c.args for c in panda.set_can_enable.call_args_list], [(0, False), (1, False), (2, False)])
     panda.set_ir_power.assert_called_once_with(0)
-    panda.set_fan_power.assert_called_once_with(100)
+    panda.set_safety_mode.assert_not_called()
+    panda.set_can_enable.assert_not_called()
+    panda.set_fan_power.assert_not_called()
+    panda.can_clear.assert_not_called()
+    panda.health.assert_not_called()
 
-  def test_hardware_errors_stop_startup(self):
-    for health in (dict(safety_mode=1, controls_allowed=False), dict(safety_mode=0, controls_allowed=True)):
-      cls, _ = self.fake_pandas(health=health)
-      with self.subTest(health=health), self.assertRaises(RuntimeError):
-        bench.quiet_pandas(cls)
+  def test_missing_or_bootstub_panda_stops_startup(self):
     cls, _ = self.fake_pandas(bootstub=True)
     with self.assertRaises(RuntimeError):
-      bench.quiet_pandas(cls)
+      bench.verify_pandas(cls)
+    cls, _ = self.fake_pandas()
     cls.list.return_value = []
     with self.assertRaises(RuntimeError):
-      bench.quiet_pandas(cls)
+      bench.verify_pandas(cls)
 
   def test_existing_vehicle_service_prevents_startup(self):
     with tempfile.TemporaryDirectory() as temp:
@@ -219,45 +213,6 @@ class BenchTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
           bench.reset_direct_leds(root, required=True)
 
-  def test_changed_native_binary_prevents_startup(self):
-    with patch.dict(os.environ, {bench.ACK_ENV: "1"}), patch.dict("sys.modules", {"panda": SimpleNamespace(Panda=Mock())}):
-      with patch.object(bench, "require_no_vehicle_services"), patch.object(bench.hashlib, "sha256") as sha:
-        sha.return_value.hexdigest.return_value = "unexpected"
-        with patch.object(bench, "quiet_pandas") as quiet, self.assertRaisesRegex(RuntimeError, "executable changed"):
-          bench.initialize_bench()
-        quiet.assert_not_called()
-
-  def test_wrong_panda_package_prevents_startup(self):
-    with patch.dict(os.environ, {bench.ACK_ENV: "1"}), patch.dict("sys.modules", {"panda": SimpleNamespace(Panda=Mock())}):
-      with patch.object(bench, "require_no_vehicle_services"), patch.object(bench.inspect, "getfile", return_value="/tmp/other/panda.py"):
-        with patch.object(bench, "quiet_pandas") as quiet, self.assertRaisesRegex(RuntimeError, "confined Panda API"):
-          bench.initialize_bench()
-        quiet.assert_not_called()
-
-  def test_stock_host_ir_does_not_overwrite_replacement(self):
-    if PACKAGE == "":
-      self.skipTest("C3 has no Python host IR setter; its hardware path is Panda")
-    hardware = ROOT / PACKAGE / ("common/hardware/comma/hardware.py" if PACKAGE == "openpilot" else "system/hardware/tici/hardware.py")
-    namespace = definitions(hardware, {"set_ir_power"}, {}, classes=True)
-    with patch("builtins.open", side_effect=AssertionError("Stock IR wrote hardware")):
-      namespace["set_ir_power"](Mock(), 100)
-
-  def test_bench_dm_tutorial_does_not_wait_for_stock_faces(self):
-    if PACKAGE == "":
-      return  # Qt C3 has no MICI face-based tutorial.
-    path = ROOT / PACKAGE / "selfdrive/ui/mici/layouts/onboarding.py"
-    tree = ast.parse(path.read_text())
-    cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "TrainingGuideDMTutorial")
-    cls.body = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "_update_state"]
-    cls.bases = [ast.Name(id="Base", ctx=ast.Load())]
-    namespace = dict(BENCH_ONLY=True, Base=type("Base", (), {"_update_state": lambda self: None}))
-    module = ast.Module(body=[ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0), cls], type_ignores=[])
-    exec(compile(ast.fix_missing_locations(module), str(path), "exec"), namespace)
-    widget = namespace["TrainingGuideDMTutorial"]()
-    widget._good_button = Mock()
-    widget._update_state()
-    widget._good_button.set_enabled.assert_called_once_with(True)
-
   def test_led_reset_is_once_and_missing_c4_controls_fail_closed(self):
     with tempfile.TemporaryDirectory() as temp:
       root = Path(temp)
@@ -271,14 +226,73 @@ class BenchTests(unittest.TestCase):
       for path in root.glob("*/brightness"):
         self.assertEqual(path.read_text(), "0\n")
 
-  def test_manager_and_panda_wrapper_fail_before_side_effects(self):
+  def test_changed_native_binary_prevents_startup(self):
+    with patch.dict(os.environ, {bench.ACK_ENV: "1"}), patch.dict("sys.modules", {"panda": SimpleNamespace(Panda=Mock())}):
+      with patch.object(bench, "require_no_vehicle_services"), patch.object(bench.hashlib, "sha256") as sha:
+        sha.return_value.hexdigest.return_value = "unexpected"
+        with patch.object(bench, "verify_pandas") as verify, self.assertRaisesRegex(RuntimeError, "executable changed"):
+          bench.initialize_bench()
+        verify.assert_not_called()
+
+  def test_wrong_panda_package_prevents_startup(self):
+    with patch.dict(os.environ, {bench.ACK_ENV: "1"}), patch.dict("sys.modules", {"panda": SimpleNamespace(Panda=Mock())}):
+      with patch.object(bench, "require_no_vehicle_services"), patch.object(bench.inspect, "getfile", return_value="/tmp/other/panda.py"):
+        with patch.object(bench, "verify_pandas") as verify, self.assertRaisesRegex(RuntimeError, "confined Panda API"):
+          bench.initialize_bench()
+        verify.assert_not_called()
+
+  def test_native_bridge_is_stock_plus_ir_only_patches(self):
+    manifest = json.loads((ROOT / "BKV_BENCH_NATIVE.json").read_text())
+    binary = (ROOT / manifest["binary"]).read_bytes()
+    self.assertEqual(hashlib.sha256(binary).hexdigest(), manifest["bench_sha256"])
+    baseline = subprocess.check_output(["git", "show", f"{manifest['base']}:{manifest['binary']}"], cwd=ROOT)
+    self.assertEqual(hashlib.sha256(baseline).hexdigest(), manifest["original_sha256"])
+    expected = bytearray(baseline)
+    for patch in manifest["patches"]:
+      offset = patch["file_offset"]
+      self.assertEqual(binary[offset:offset + len(bytes.fromhex(patch["instructions"]))].hex(), patch["instructions"])
+      self.assertNotEqual(baseline[offset:offset + 4].hex(), patch["instructions"])
+      expected[offset:offset + 4] = bytes.fromhex(patch["instructions"])
+    # ELF entry point and every other byte stay exactly stock: CAN is untouched.
+    self.assertEqual(binary[:24], baseline[:24])
+    self.assertEqual(bytes(binary), bytes(expected))
+
+  def test_stock_host_ir_does_not_overwrite_replacement(self):
+    if PACKAGE == "":
+      self.skipTest("C3 has no Python host IR setter; its hardware path is Panda")
+    hardware = ROOT / PACKAGE / ("common/hardware/comma/hardware.py" if PACKAGE == "openpilot" else "system/hardware/tici/hardware.py")
+    namespace = definitions(hardware, {"set_ir_power"}, {}, classes=True)
+    with patch("builtins.open", side_effect=AssertionError("Stock IR wrote hardware")):
+      namespace["set_ir_power"](Mock(), 100)
+
+  def test_bench_dm_tutorial_does_not_wait_for_stock_faces(self):
+    if PACKAGE == "":
+      self.skipTest("C3 uses the Qt interface, not the MICI tutorial")
+    path = ROOT / PACKAGE / "selfdrive/ui/mici/layouts/onboarding.py"
+    tree = ast.parse(path.read_text())
+    cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "TrainingGuideDMTutorial")
+    cls.body = [n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "_update_state"]
+    cls.bases = [ast.Name(id="Base", ctx=ast.Load())]
+    namespace = dict(BENCH_ONLY=True, Base=type("Base", (), {"_update_state": lambda self: None}))
+    module = ast.Module(body=[ast.ImportFrom(module="__future__", names=[ast.alias(name="annotations")], level=0), cls], type_ignores=[])
+    exec(compile(ast.fix_missing_locations(module), str(path), "exec"), namespace)
+    widget = namespace["TrainingGuideDMTutorial"]()
+    widget._good_button = Mock()
+    widget._update_state()
+    widget._good_button.set_enabled.assert_called_once_with(True)
+
+  def test_stock_dm_runtime_dependencies_are_gated(self):
+    controlsd = SYSTEM.parent / "selfdrive/controls/controlsd.py"
+    selfdrived = SYSTEM.parent / "selfdrive/selfdrived/selfdrived.py"
+    for path in (controlsd, selfdrived):
+      self.assertIn("STOCK_DRIVER_MONITORING_ENABLED = False", path.read_text())
+    self.assertIn("STOCK_DRIVER_MONITORING_ENABLED and", controlsd.read_text())
+    self.assertIn("ignore += ['driverMonitoringState']", selfdrived.read_text())
+
+  def test_manager_requires_bench_acknowledgment(self):
     namespace = definitions(SYSTEM / "manager/manager.py", {"manager_init"}, {})
     with patch.dict(os.environ, {}, clear=True), self.assertRaisesRegex(RuntimeError, "Bench only"):
       namespace["manager_init"]()
-    wrapper = ROOT / PACKAGE / "selfdrive/pandad/pandad.py"
-    namespace = definitions(wrapper, {"main"}, {})
-    with self.assertRaisesRegex(RuntimeError, "refuses process"):
-      namespace["main"]()
 
   def test_launcher_refuses_unacknowledged_boot(self):
     env = dict(os.environ)
@@ -286,15 +300,6 @@ class BenchTests(unittest.TestCase):
     result = subprocess.run(["bash", str(ROOT / "launch_chffrplus.sh")], env=env, capture_output=True, text=True)
     self.assertEqual(result.returncode, 78)
     self.assertIn("BENCH ONLY", result.stderr)
-
-  def test_native_bridge_is_confined_and_matches_manifest(self):
-    manifest = json.loads((ROOT / "BKV_BENCH_NATIVE.json").read_text())
-    binary = (ROOT / manifest["binary"]).read_bytes()
-    self.assertEqual(hashlib.sha256(binary).hexdigest(), manifest["bench_sha256"])
-    self.assertEqual(struct.unpack_from("<Q", binary, 24)[0], manifest["entry_address"])
-    offset = manifest["main_file_offset"]
-    self.assertEqual(binary[offset:offset+12].hex(), manifest["exit_instructions"])
-    self.assertEqual(manifest["verified_exit_status"], 78)
 
   def test_seatbelt_does_not_emit_event_but_other_events_remain(self):
     path = ROOT / PACKAGE / "selfdrive/car" / ("car_events.py" if PACKAGE == "openpilot" else "car_specific.py")
